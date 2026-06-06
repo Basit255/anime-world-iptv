@@ -10,7 +10,7 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    - name: Install FFmpeg and Tools
+    - name: Install FFmpeg and Network Tools
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg curl unzip
@@ -28,39 +28,15 @@ jobs:
         ./localtonet -token $LOCALTONET_AUTH_TOKEN -protocol http -port 8080 > /dev/null 2>&1 &
         sleep 10
 
-    - name: Download All Videos and Create Local Playlist
+    - name: Start 24/7 Direct Cloud Stream
       run: |
-        echo "Saari badi videos direct download ho rahi hain..."
-        rm -f local_playlist.txt
-        touch local_playlist.txt
+        echo "Bina download kiye Google Drive se direct streaming chalu ho rahi hai..."
         
-        count=1
-        # playlist.m3u se direct links nikal kar download karne ka loop
-        grep -E '^https?://' playlist.m3u | while read -r link; do
-          echo "Downloading video number $count..."
-          
-          # Google Drive Bypass Cookie Download
-          curl -L -c cookies.txt "$link" > confirm.html
-          CONFIRM_CODE=$(grep -o 'confirm=[^&"]*' confirm.html | head -n 1)
-          
-          if [ ! -z "$CONFIRM_CODE" ]; then
-            curl -L -b cookies.txt "${link}&${CONFIRM_CODE}" -o "video_${count}.mp4"
-          else
-            curl -L -b cookies.txt "$link" -o "video_${count}.mp4"
-          fi
-          
-          # Bina kisi complex path ke simple filename entry
-          echo "file 'video_${count}.mp4'" >> local_playlist.txt
-          count=$((count+1))
-        done
-        
-        echo "--- DOWNLOAD COMPLETED! CHANNELS KI LIST NEECHE HAI ---"
-        cat local_playlist.txt
-
-    - name: Start 24/7 Multi-Video Stream
-      run: |
-        ffmpeg -re -f concat -safe 0 -stream_loop -1 -i local_playlist.txt -i logo.png \
+        ffmpeg -re -f concat -safe 0 -stream_loop -1 \
+        -protocol_whitelist file,http,https,tcp,tls \
+        -headers "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+        -i playlist.txt -i logo.png \
         -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
-        -c:v libx264 -preset veryfast -b:v 1500k -maxrate 1500k -bufsize 3000k \
+        -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
         -c:a aac -b:a 128k -ar 44100 \
         -f mpegts http://127.0.0.1:8080/live
