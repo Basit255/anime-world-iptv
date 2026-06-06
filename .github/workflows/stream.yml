@@ -30,30 +30,31 @@ jobs:
 
     - name: Download All Videos and Create Local Playlist
       run: |
-        echo "Saari badi videos download ho rahi hain..."
-        mkdir -p /home/runner/work/videos
+        echo "Saari badi videos direct download ho rahi hain..."
+        rm -f local_playlist.txt
         touch local_playlist.txt
         
         count=1
+        # playlist.m3u se direct links nikal kar download karne ka loop
         grep -E '^https?://' playlist.m3u | while read -r link; do
-          echo "Downloading video $count..."
+          echo "Downloading video number $count..."
           
-          # Google Drive Bypass Download
+          # Google Drive Bypass Cookie Download
           curl -L -c cookies.txt "$link" > confirm.html
           CONFIRM_CODE=$(grep -o 'confirm=[^&"]*' confirm.html | head -n 1)
           
           if [ ! -z "$CONFIRM_CODE" ]; then
-            curl -L -b cookies.txt "${link}&${CONFIRM_CODE}" -o "/home/runner/work/videos/file_${count}.mp4"
+            curl -L -b cookies.txt "${link}&${CONFIRM_CODE}" -o "video_${count}.mp4"
           else
-            curl -L -b cookies.txt "$link" -o "/home/runner/work/videos/file_${count}.mp4"
+            curl -L -b cookies.txt "$link" -o "video_${count}.mp4"
           fi
           
-          # FFmpeg strict formatting with absolute path
-          echo "file '/home/runner/work/videos/file_${count}.mp4'" >> local_playlist.txt
+          # Bina kisi complex path ke simple filename entry
+          echo "file 'video_${count}.mp4'" >> local_playlist.txt
           count=$((count+1))
         done
         
-        echo "Download Poora Hua! Playlist ki checking:"
+        echo "--- DOWNLOAD COMPLETED! CHANNELS KI LIST NEECHE HAI ---"
         cat local_playlist.txt
 
     - name: Start 24/7 Multi-Video Stream
