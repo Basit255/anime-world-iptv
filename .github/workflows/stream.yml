@@ -10,7 +10,7 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    - name: Install FFmpeg and Network Tools
+    - name: Install FFmpeg and Tools
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg curl unzip
@@ -28,15 +28,36 @@ jobs:
         ./localtonet -token $LOCALTONET_AUTH_TOKEN -protocol http -port 8080 > /dev/null 2>&1 &
         sleep 10
 
-    - name: Start 24/7 Direct Cloud Stream
+    - name: Infinite Loop Smart Streamer
       run: |
-        echo "Bina download kiye Google Drive se direct streaming chalu ho rahi hai..."
+        echo "Smart Sequential Stream Started..."
         
-        ffmpeg -re -f concat -safe 0 -stream_loop -1 \
-        -protocol_whitelist file,http,https,tcp,tls \
-        -headers "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-        -i playlist.txt -i logo.png \
-        -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
-        -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
-        -c:a aac -b:a 128k -ar 44100 \
-        -f mpegts http://127.0.0.1:8080/live
+        while true; do
+          count=1
+          grep -E '^https?://' playlist.m3u | while read -r link; do
+            echo "Processing Episode $count..."
+            
+            # Google Drive Smart Download
+            curl -L -c cookies.txt "$link" > confirm.html
+            CONFIRM_CODE=$(grep -o 'confirm=[^&"]*' confirm.html | head -n 1)
+            
+            if [ ! -z "$CONFIRM_CODE" ]; then
+              curl -L -b cookies.txt "${link}&${CONFIRM_CODE}" -o "current_video.mp4"
+            else
+              curl -L -b cookies.txt "$link" -o "current_video.mp4"
+            fi
+            
+            echo "Episode $count Downloaded. Streaming now..."
+            
+            # FFmpeg plays this single video to the localtonet port
+            ffmpeg -re -i current_video.mp4 -i logo.png \
+            -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
+            -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
+            -c:a aac -b:a 128k -ar 44100 \
+            -f mpegts http://127.0.0.1:8080/live || echo "Stream ended or skipped"
+            
+            # Delete after streaming to save space for next video
+            rm -f current_video.mp4
+            count=$((count+1))
+          done
+        done
