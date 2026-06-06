@@ -12,10 +12,22 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    - name: Install FFmpeg
+    - name: Install FFmpeg & Localtonet
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg
+        sudo apt-get install -y ffmpeg wget unzip
+        # Localtonet download aur install karne ke liye
+        wget https://localtonet.com/download/localtonet-linux-x64.zip
+        unzip localtonet-linux-x64.zip
+        chmod +x localtonet
+
+    - name: Start Public Tunnel
+      env:
+        LT_TOKEN: ${{ secrets.LOCALTONET_TOKEN }}
+      run: |
+        # Background mein localtonet ko chalu karna HTTP port 8080 par
+        ./localtonet -token $LT_TOKEN -type http -port 8080 &
+        sleep 5
 
     - name: Start 24/7 Stream with Resized Logo
       run: |
