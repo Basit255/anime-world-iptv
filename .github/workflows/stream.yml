@@ -30,11 +30,10 @@ jobs:
 
     - name: Download All Videos and Create Local Playlist
       run: |
-        echo "Saari badi videos download ho rahi hain, isme 1-2 minute lag sakte hain..."
-        mkdir -p videos
+        echo "Saari badi videos download ho rahi hain..."
+        mkdir -p /home/runner/work/videos
         touch local_playlist.txt
         
-        # Playlist se saare links nikal kar download karne ka loop
         count=1
         grep -E '^https?://' playlist.m3u | while read -r link; do
           echo "Downloading video $count..."
@@ -44,17 +43,18 @@ jobs:
           CONFIRM_CODE=$(grep -o 'confirm=[^&"]*' confirm.html | head -n 1)
           
           if [ ! -z "$CONFIRM_CODE" ]; then
-            curl -L -b cookies.txt "${link}&${CONFIRM_CODE}" -o "videos/file_${count}.mp4"
+            curl -L -b cookies.txt "${link}&${CONFIRM_CODE}" -o "/home/runner/work/videos/file_${count}.mp4"
           else
-            curl -L -b cookies.txt "$link" -o "videos/file_${count}.mp4"
+            curl -L -b cookies.txt "$link" -o "/home/runner/work/videos/file_${count}.mp4"
           fi
           
-          # Local FFmpeg playlist tayar karna
-          echo "file 'videos/file_${count}.mp4'" >> local_playlist.txt
+          # FFmpeg strict formatting with absolute path
+          echo "file '/home/runner/work/videos/file_${count}.mp4'" >> local_playlist.txt
           count=$((count+1))
         done
         
-        echo "Saari videos download ho gayi hain! Ab 24/7 stream shuru ho rahi hai..."
+        echo "Download Poora Hua! Playlist ki checking:"
+        cat local_playlist.txt
 
     - name: Start 24/7 Multi-Video Stream
       run: |
