@@ -1,0 +1,28 @@
+name: 24-7 Anime World IPTV Streamer
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  stream:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Install FFmpeg
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+
+    - name: Start 24/7 Stream with Resized Logo
+      run: |
+        while true; do
+          ffmpeg -re -i playlist.m3u -i logo.png \
+          -filter_complex "[1:v]scale=160:-1[logo];[0:v][logo]overlay=main_w-overlay_w-15:15" \
+          -c:v libx264 -preset veryfast -b:v 1500k -maxrate 1500k -bufsize 3000k \
+          -c:a aac -b:a 128k -ar 44100 \
+          -f mpegts http://localhost:8080/live
+        done
