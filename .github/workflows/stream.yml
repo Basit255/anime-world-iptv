@@ -1,8 +1,6 @@
 name: 24-7 Anime World IPTV Streamer
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -12,29 +10,31 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    - name: Install FFmpeg & Localtonet
+    - name: Install FFmpeg and Network Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg wget unzip
-        # Localtonet download aur install karne ke liye
-        wget https://localtonet.com/download/localtonet-linux-x64.zip
-        unzip localtonet-linux-x64.zip
+        sudo apt-get install -y ffmpeg curl
+
+    - name: Download and Install Localtonet
+      run: |
+        curl -L https://localtonet.com/download/localtonet-linux-x64.zip -o localtonet.zip
+        unzip localtonet.zip
         chmod +x localtonet
 
-    - name: Start Public Tunnel
+    - name: Start Localtonet Tunnel
       env:
-        LT_TOKEN: ${{ secrets.LOCALTONET_TOKEN }}
+        LOCALTONET_AUTH_TOKEN: ${{ secrets.LOCALTONET_AUTH_TOKEN }}
       run: |
-        # Background mein localtonet ko chalu karna HTTP port 8080 par
-        ./localtonet -token $LT_TOKEN -type http -port 8080 &
+        ./localtonet -token $LOCALTONET_AUTH_TOKEN -protocol http -port 8080 > /dev/null 2>&1 &
         sleep 5
 
-    - name: Start 24/7 Stream with Resized Logo
+    - name: Start 24/7 Stream with Enhanced Google Bypass
       run: |
-        while true; do
-          ffmpeg -re -i playlist.m3u -i logo.png \
-          -filter_complex "[1:v]scale=160:-1[logo];[0:v][logo]overlay=main_w-overlay_w-15:15" \
-          -c:v libx264 -preset veryfast -b:v 1500k -maxrate 1500k -bufsize 3000k \
-          -c:a aac -b:a 128k -ar 44100 \
-          -f mpegts http://localhost:8080/live
-        done
+        ffmpeg -re -f concat -safe 0 -protocol_whitelist file,http,https,tcp,tls \
+        -headers "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+        -i playlist.m3u \
+        -i logo.png \
+        -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
+        -c:v libx264 -preset veryfast -b:v 1500k -maxrate 1500k -bufsize 3000k \
+        -c:a aac -b:a 128k -ar 44100 \
+        -f mpegts http://127.0.0.1:8080/live
