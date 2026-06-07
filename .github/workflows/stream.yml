@@ -1,35 +1,84 @@
-name: 24-7 Animex Zone M3U8 Generator
+name: 24-7 Animex Zone VLC Streamer
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'playlist.m3u'
 
 jobs:
-  build-playlist:
+  stream:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Generate Direct IPTV M3U8 File
+    - name: Install FFmpeg
       run: |
-        echo "Creating permanent IPTV playlist..."
-        echo "#EXTM3U" > animex.m3u8
-        
-        count=1
-        grep -E '^https?://' playlist.m3u | while read -r url; do
-          echo "#EXTINF:-1, Animex Zone Stream $count" >> animex.m3u8
-          echo "$url" >> animex.m3u8
-          count=$((count+1))
-        done
-        echo "Playlist Generated!"
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg curl git
 
-    - name: Commit and Push M3U8 to GitHub
+    - name: Setup Git Configuration
       run: |
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
-        git add animex.m3u8
-        git commit -m "Auto-updated IPTV Playlist" || echo "No changes to commit"
-        git push
+
+    - name: Start 24/7 HLS Logo Stream
+      run: |
+        echo "Creating HLS Directory..."
+        mkdir -p live
+        
+        # Ek loop chalega jo background mein files ko update karke GitHub par push karta rahega
+        while true; do
+          # Video 1
+          echo "Processing Video 1 with Logo..."
+          curl -L "https://github.com/Basit255/anime-world-iptv/releases/download/v1.0/Video.1" -o video.mp4
+          ffmpeg -re -i video.mp4 -i logo.png \
+          -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
+          -c:v libx264 -preset veryfast -b:v 1000k -maxrate 1000k -bufsize 2000k \
+          -c:a aac -b:a 128k -ar 44100 \
+          -f hls -hls_time 6 -hls_list_size 10 -hls_flags delete_segments \
+          -hls_segment_filename "live/seg_%03d.ts" live/index.m3u8 &
+          
+          # Is loop ke andar 45 seconds ke baad automatic files push hongi
+          sleep 45
+          git add live/*
+          git commit -m "Update Live Stream Chunks" || echo "No changes"
+          git push origin main || echo "Push failed, retrying..."
+          
+          killall ffmpeg || true
+          rm -f video.mp4
+
+          # Video 2
+          echo "Processing Video 2 with Logo..."
+          curl -L "https://github.com/Basit255/anime-world-iptv/releases/download/v1.0/Video.2" -o video.mp4
+          ffmpeg -re -i video.mp4 -i logo.png \
+          -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
+          -c:v libx264 -preset veryfast -b:v 1000k -maxrate 1000k -bufsize 2000k \
+          -c:a aac -b:a 128k -ar 44100 \
+          -f hls -hls_time 6 -hls_list_size 10 -hls_flags delete_segments \
+          -hls_segment_filename "live/seg_%03d.ts" live/index.m3u8 &
+          
+          sleep 45
+          git add live/*
+          git commit -m "Update Live Stream Chunks" || echo "No changes"
+          git push origin main || echo "Push failed"
+          
+          killall ffmpeg || true
+          rm -f video.mp4
+
+          # Video 3
+          echo "Processing Video 3 with Logo..."
+          curl -L "https://github.com/Basit255/anime-world-iptv/releases/download/v1.0/Video.3" -o video.mp4
+          ffmpeg -re -i video.mp4 -i logo.png \
+          -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
+          -c:v libx264 -preset veryfast -b:v 1000k -maxrate 1000k -bufsize 2000k \
+          -c:a aac -b:a 128k -ar 44100 \
+          -f hls -hls_time 6 -hls_list_size 10 -hls_flags delete_segments \
+          -hls_segment_filename "live/seg_%03d.ts" live/index.m3u8 &
+          
+          sleep 45
+          git add live/*
+          git commit -m "Update Live Stream Chunks" || echo "No changes"
+          git push origin main || echo "Push failed"
+          
+          killall ffmpeg || true
+          rm -f video.mp4
+        done
