@@ -30,36 +30,36 @@ jobs:
 
     - name: Smart Auto-Click Download & Stream
       run: |
-        echo "Starting Google Drive Bypass Streamer..."
+        echo "Starting Google Drive Smart Bypass Streamer..."
         
         while true; do
           count=1
           # playlist.m3u se sirf links nikalna
           grep -E '^https?://' playlist.m3u | while read -r url; do
-            # URL se File ID alag karna
-            FILE_ID=$(echo "$url" | grep -oP '(id=|/d/)\K[^&\s]+')
+            # URL se File ID alag karna (chahe uc?id= ho ya file/d/)
+            FILE_ID=$(echo "$url" | grep -oP '(id=|/d/)\K[^&\s/]+')
             filename="video_${count}.mp4"
             
             echo "Processing Video $count (ID: $FILE_ID)..."
             
-            # Step 1: Google Drive par pehli request bhej kar cookies save karna
+            # Step 1: Google Drive par request bhej kar cookies save karna aur HTML page check karna
             curl -c cookies.txt -s -L "https://docs.google.com/uc?export=download&id=${FILE_ID}" > confirm.html
             
-            # Step 2: "Download Anyway" button ka hidden confirmation code (token) nikalna
+            # Step 2: "Download Anyway" button ka hidden confirmation token nikalna
             CONFIRM=$(grep -o 'confirm=[^&"]*' confirm.html | head -n 1 | cut -d= -f2)
             
-            # Step 3: Agar token mil jaye (Badi file ho), toh token ke sath download karna, warna direct download
+            # Step 3: Agar confirmation token mila (Bari file hai), toh automatic click karke download karna
             if [ ! -z "$CONFIRM" ]; then
-              echo "Bypass Token Found! Clicking 'Download Anyway' automatically..."
+              echo "HTML Warning Detected! Clicking 'Download Anyway' automatically..."
               curl -b cookies.txt -c cookies.txt -L "https://docs.google.com/uc?export=download&confirm=${CONFIRM}&id=${FILE_ID}" -o "$filename"
             else
-              echo "Small file or direct link. Downloading directly..."
+              echo "Direct download link or small file. Downloading directly..."
               curl -b cookies.txt -L "https://docs.google.com/uc?export=download&id=${FILE_ID}" -o "$filename"
             fi
             
-            # Step 4: Check karna ke asli video download hui ya nahi
-            if [ -f "$filename" ] && [ -s "$filename" ]; then
-              echo "Video $count downloaded successfully! Starting stream..."
+            # Step 4: Check karna ke file sahi download hui (Size > 10MB)
+            if [ -f "$filename" ] && [ $(stat -c%s "$filename") -gt 10000000 ]; then
+              echo "Video $count downloaded 100% successfully! Starting stream..."
               
               ffmpeg -re -i "$filename" -i "https://i.ibb.co/6wG6YV6/logo.png" \
               -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
@@ -67,10 +67,10 @@ jobs:
               -c:a aac -b:a 128k -ar 44100 \
               -f mpegts http://127.0.0.1:8080/live || echo "Moving to next video"
             else
-              echo "Error: Download failed for Video $count"
+              echo "Error: HTML page could not be bypassed or file is invalid for Video $count"
             fi
             
-            # Safai taaki storage full na ho
+            # Safai taaki cloud ki space full na ho
             rm -f "$filename" confirm.html cookies.txt
             count=$((count+1))
           done
