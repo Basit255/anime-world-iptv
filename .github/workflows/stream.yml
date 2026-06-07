@@ -29,34 +29,69 @@ jobs:
         ./localtonet -token $LOCALTONET_AUTH_TOKEN -protocol http -port 8080 > /dev/null 2>&1 &
         sleep 10
 
-    - name: Gdown Direct Streamer
+    - name: Run Python Downloader and Streamer
       run: |
-        echo "Starting clean Google Drive stream with Animex Zone logo..."
+        cat << 'EOF' > stream_runner.py
+        import os
+        import subprocess
+        import time
+
+        def get_gdrive_id(url):
+            # URL se file ID nikalne ka tareeqa
+            if "id=" in url:
+                return url.split("id=")[1].split("&")[0].strip()
+            elif "file/d/" in url:
+                return url.split("file/d/")[1].split("/")[0].strip()
+            return None
+
+        while True:
+            if not os.path.exists("playlist.m3u"):
+                print("Error: playlist.m3u not found!")
+                time.sleep(10)
+                continue
+
+            with open("playlist.m3u", "r") as f:
+                lines = f.readlines()
+
+            urls = [line.strip() for line in lines if line.strip().startswith("http")]
+            
+            if not urls:
+                print("No URLs found in playlist.m3u")
+                time.sleep(5)
+                continue
+
+            for count, url in enumerate(urls, 1):
+                file_id = get_gdrive_id(url)
+                if not file_id:
+                    print(f"Skipping invalid URL: {url}")
+                    continue
+
+                filename = f"video_{count}.mp4"
+                print(f"Downloading Video {count} (ID: {file_id})...")
+                
+                # gdown ko run karna python se
+                download_cmd = f'gdown --id {file_id} -O {filename} --remaining-ok --quiet'
+                res = os.system(download_cmd)
+
+                if os.path.exists(filename) and os.path.getsize(filename) > 1000:
+                    print(f"Video {count} downloaded successfully. Starting FFmpeg stream...")
+                    
+                    ffmpeg_cmd = [
+                        "ffmpeg", "-re", "-i", filename, "-i", "https://i.ibb.co/6wG6YV6/logo.png",
+                        "-filter_complex", "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10",
+                        "-c:v", "libx264", "-preset", "veryfast", "-b:v", "1200k", "-maxrate", "1200k", "-bufsize", "2400k",
+                        "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+                        "-f", "mpegts", "http://127.0.0.1:8080/live"
+                    ]
+                    
+                    # FFmpeg chalana aur khatam hone ka intezar karna
+                    subprocess.run(ffmpeg_cmd)
+                else:
+                    print(f"Failed to download Video {count}")
+
+                # Safai taaki space full na ho
+                if os.path.exists(filename):
+                    os.remove(filename)
+        EOF
         
-        while true; do
-          count=1
-          # playlist.m3u se lines read karna
-          grep -E '^https?://' playlist.m3u | while read -r url; do
-            echo "Downloading video $count from Google Drive..."
-            
-            # Direct URL ko bina regex ke gdown mein pass karna
-            gdown "$url" -o "video_${count}.mp4" --remaining-ok
-            
-            if [ -f "video_${count}.mp4" ] && [ -s "video_${count}.mp4" ]; then
-              echo "Video $count downloaded successfully. Streaming now..."
-              
-              ffmpeg -re -i "video_${count}.mp4" -i "https://i.ibb.co/6wG6YV6/logo.png" \
-              -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
-              -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
-              -c:a aac -b:a 128k -ar 44100 \
-              -f mpegts http://127.0.0.1:8080/live || echo "Next video transition"
-              
-            else
-              echo "Error: Could not download video $count"
-            fi
-            
-            # Cleanup
-            rm -f "video_${count}.mp4"
-            count=$((count+1))
-          done
-        done
+        python3 stream_runner.py
