@@ -28,15 +28,37 @@ jobs:
         ./localtonet -token $LOCALTONET_AUTH_TOKEN -protocol http -port 8080 > /dev/null 2>&1 &
         sleep 10
 
-    - name: Start 24/7 Animex Zone Stream
+    - name: Safe Loop Streamer (Small Files)
       run: |
-        echo "Starting live stream with ANIMEX ZONE logo..."
+        echo "Starting safe sequential stream for Animex Zone..."
         
-        ffmpeg -re -f concat -safe 0 -stream_loop -1 \
-        -protocol_whitelist file,http,https,tcp,tls \
-        -headers "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-        -i playlist.m3u -i "https://i.ibb.co/6wG6YV6/logo.png" \
-        -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
-        -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
-        -c:a aac -b:a 128k -ar 44100 \
-        -f mpegts http://127.0.0.1:8080/live
+        while true; do
+          count=1
+          # playlist.m3u se sirf links nikalne ke liye
+          grep -E '^https?://' playlist.m3u | while read -r link; do
+            echo "Downloading video $count from Google Drive..."
+            
+            # Google Drive se bina warning ke file download karne ka safe tareeqa
+            curl -L -c cookies.txt "$link" > confirm.html
+            CONFIRM_CODE=$(grep -o 'confirm=[^&"]*' confirm.html | head -n 1)
+            
+            if [ ! -z "$CONFIRM_CODE" ]; then
+              curl -L -b cookies.txt "${link}&${CONFIRM_CODE}" -o "video_${count}.mp4"
+            else
+              curl -L -b cookies.txt "$link" -o "video_${count}.mp4"
+            fi
+            
+            echo "Video $count downloaded successfully. Streaming now..."
+            
+            # Local file ko logo ke sath stream karna
+            ffmpeg -re -i "video_${count}.mp4" -i "https://i.ibb.co/6wG6YV6/logo.png" \
+            -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
+            -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
+            -c:a aac -b:a 128k -ar 44100 \
+            -f mpegts http://127.0.0.1:8080/live || echo "Stream gap/skip handled"
+            
+            # Stream khatam hone ke baad file delete taaki storage khali rahe
+            rm -f "video_${count}.mp4" confirm.html cookies.txt
+            count=$((count+1))
+          done
+        done
