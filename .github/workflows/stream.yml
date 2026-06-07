@@ -1,4 +1,4 @@
-name: 24-7 Animex Zone Cloud Streamer (Serveo)
+name: 24-7 Animex Zone Direct Cloud Streamer
 
 on:
   workflow_dispatch:
@@ -10,48 +10,46 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Install FFmpeg and Tools
+    - name: Install Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg curl
+        sudo apt-get install -y curl nodejs
 
-    - name: Start Stream Server and Expose Link
+    - name: Start Ultimate Direct Server
       run: |
-        echo "Starting Local Server on Port 8080..."
+        echo "Creating Instant Live Stream Server..."
         
-        # Background loop taaki video background mein chalti rahe
-        while true; do
-          count=1
-          grep -E '^https?://' playlist.m3u | while read -r url; do
-            filename="video_${count}.mp4"
-            echo "Downloading Video $count from GitHub Releases..."
-            
-            curl -L "$url" -o "$filename"
-            
-            if [ -f "$filename" ] && [ -s "$filename" ]; then
-              echo "Video $count downloaded successfully! Streaming to port 8080..."
-              
-              ffmpeg -re -i "$filename" -i logo.png \
-              -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
-              -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
-              -c:a aac -b:a 128k -ar 44100 \
-              -f mpegts http://127.0.0.1:8080 || echo "Moving next..."
-            else
-              echo "Error downloading Video $count"
-            fi
-            
-            rm -f "$filename"
-            count=$((count+1))
-          done
-          sleep 5
-        done &
-
-        echo "Waiting for FFmpeg to initialize..."
+        # Ek makkhan chota server scripts banana bina kisi port failure ke
+        cat << 'EOF' > server.js
+        const http = require('http');
+        const { exec } = require('child_process');
+        
+        const server = http.createServer((req, res) => {
+          console.log("VLC Connected! Starting live feed...");
+          res.writeHead(200, { 'Content-Type': 'video/mpjs', 'Connection': 'keep-alive' });
+          
+          // FFmpeg direct download aur logo overlay ko feed karega VLC mein
+          const ffmpegCmd = `ffmpeg -re -i "https://github.com/Basit255/anime-world-iptv/releases/download/v1.0/Video.1" -i logo.png -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" -c:v libx264 -preset veryfast -b:v 1000k -c:a aac -b:a 128k -f mpegts pipe:1`;
+          
+          const ffmpeg = exec(ffmpegCmd);
+          ffmpeg.stdout.pipe(res);
+          
+          req.on('close', () => {
+            console.log("VLC Disconnected.");
+            ffmpeg.kill();
+          });
+        });
+        
+        server.listen(8080, '0.0.0.0', () => {
+          console.log("Server is ready on port 8080");
+        });
+        EOF
+        
+        node server.js &
         sleep 5
-
+        
         echo "--------------------------------------------------------"
-        echo "🚀 AAPKA VLC LIVE LINK NEECHE GENERATE HO RAHA HAI 🚀"
+        echo "🚀 LOCAL TENSION KHATAM - SERVEO CONNECTING... 🚀"
         echo "--------------------------------------------------------"
         
-        # Serveo ka automatic tunnel link create karne ki command
         ssh -o StrictHostKeyChecking=no -R animexzone:80:127.0.0.1:8080 serveo.net
