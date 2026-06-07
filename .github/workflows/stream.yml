@@ -1,34 +1,35 @@
-name: 24-7 Animex Zone Direct Playlist Generator
+name: 24-7 Animex Zone M3U8 Generator
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'playlist.m3u'
 
 jobs:
-  generate-playlist:
+  build-playlist:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Create Live M3U Playlist File
+    - name: Generate Direct IPTV M3U8 File
       run: |
-        echo "Generating high-speed direct stream playlist..."
-        
-        # Ek makkhan public playlist file create karna bina kisi server ya port dependency ke
-        echo "#EXTM3U" > animex_zone_live.m3u
+        echo "Creating permanent IPTV playlist..."
+        echo "#EXTM3U" > animex.m3u8
         
         count=1
         grep -E '^https?://' playlist.m3u | while read -r url; do
-          echo "#EXTINF:-1, Animex Zone Video $count" >> animex_zone_live.m3u
-          echo "$url" >> animex_zone_live.m3u
+          echo "#EXTINF:-1, Animex Zone Stream $count" >> animex.m3u8
+          echo "$url" >> animex.m3u8
           count=$((count+1))
         done
-        
-        echo "Playlist created successfully!"
-        cat animex_zone_live.m3u
+        echo "Playlist Generated!"
 
-    - name: Upload Stream Playlist to GitHub
-      uses: actions/upload-artifact@v4
-      with:
-        name: Animex-Zone-VLC-Stream
-        path: animex_zone_live.m3u
+    - name: Commit and Push M3U8 to GitHub
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        git add animex.m3u8
+        git commit -m "Auto-updated IPTV Playlist" || echo "No changes to commit"
+        git push
