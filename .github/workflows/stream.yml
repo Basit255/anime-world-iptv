@@ -26,11 +26,12 @@ jobs:
         LOCALTONET_AUTH_TOKEN: ${{ secrets.LOCALTONET_AUTH_TOKEN }}
       run: |
         ./localtonet -token $LOCALTONET_AUTH_TOKEN -protocol http -port 8080 > /dev/null 2>&1 &
-        sleep 10
+        echo "Waiting for Localtonet to establish secure connection..."
+        sleep 25
 
     - name: Direct Release Stream Loop
       run: |
-        echo "Starting Direct GitHub Release Streamer with Local Logo..."
+        echo "Starting Direct GitHub Release Streamer..."
         
         while true; do
           count=1
@@ -38,18 +39,17 @@ jobs:
             filename="video_${count}.mp4"
             echo "Downloading Video $count from GitHub Releases..."
             
-            # Direct fast download
             curl -L "$url" -o "$filename"
             
             if [ -f "$filename" ] && [ -s "$filename" ]; then
               echo "Video $count downloaded successfully! Starting stream..."
               
-              # Yahan logo.png direct repository se local uthaye ga
+              # Added timeout flags for stable connection
               ffmpeg -re -i "$filename" -i logo.png \
               -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
               -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
               -c:a aac -b:a 128k -ar 44100 \
-              -f mpegts http://127.0.0.1:8080/live || echo "Moving next..."
+              -f mpegts "http://127.0.0.1:8080/live?listen_timeout=10000000" || echo "Moving next..."
             else
               echo "Error downloading Video $count"
             fi
