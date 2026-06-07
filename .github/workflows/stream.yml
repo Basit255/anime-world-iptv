@@ -1,4 +1,4 @@
-name: 24-7 Animex Zone Auto-Bypass Streamer
+name: 24-7 Animex Zone Cloud Streamer
 
 on:
   workflow_dispatch:
@@ -13,8 +13,7 @@ jobs:
     - name: Install FFmpeg and Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg curl unzip python3-pip
-        pip3 install gdown --break-system-packages
+        sudo apt-get install -y ffmpeg curl unzip
 
     - name: Download and Install Localtonet
       run: |
@@ -29,52 +28,32 @@ jobs:
         ./localtonet -token $LOCALTONET_AUTH_TOKEN -protocol http -port 8080 > /dev/null 2>&1 &
         sleep 10
 
-    - name: Ultimate Gdown Bypass Stream
+    - name: Direct Release Stream Loop
       run: |
-        echo "Starting Google Drive Ultimate Streamer..."
+        echo "Starting Direct GitHub Release Streamer..."
         
         while true; do
           count=1
-          # playlist.m3u se ek ek karke video links read karna
           grep -E '^https?://' playlist.m3u | while read -r url; do
             filename="video_${count}.mp4"
-            echo "----------------------------------------"
-            echo "Downloading Video $count using Clean Gdown..."
+            echo "Downloading Video $count from GitHub Releases..."
             
-            # Gdown bina kisi crash flag ke direct pure URL ko handle karega
-            gdown "$url" -o "$filename" --fuzzy
+            # Direct fast download without any security pages
+            curl -L "$url" -o "$filename"
             
-            # Check karna ki asli video download hui hai ya nahi (Size check > 5MB)
-            if [ -f "$filename" ] && [ $(stat -c%s "$filename") -gt 5000000 ]; then
-              echo "Success: Video $count downloaded completely! Starting stream..."
+            if [ -f "$filename" ] && [ -s "$filename" ]; then
+              echo "Video $count downloaded successfully! Starting stream..."
               
               ffmpeg -re -i "$filename" -i "https://i.ibb.co/6wG6YV6/logo.png" \
               -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
               -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
               -c:a aac -b:a 128k -ar 44100 \
-              -f mpegts http://127.0.0.1:8080/live || echo "Stream stopped, moving next..."
+              -f mpegts http://127.0.0.1:8080/live || echo "Moving next..."
             else
-              echo "Warning: Download failed or Google Drive warning page received for Video $count."
-              echo "Trying alternative direct curl approach..."
-              
-              # Fallback agar gdown ko bhi drive block kare
-              FILE_ID=$(echo "$url" | grep -oP '(id=|/d/)\K[^&\s/]+')
-              curl -L "https://docs.google.com/uc?export=download&id=${FILE_ID}" -o "$filename"
-              
-              if [ -f "$filename" ] && [ $(stat -c%s "$filename") -gt 5000000 ]; then
-                echo "Fallback download success! Streaming..."
-                ffmpeg -re -i "$filename" -i "https://i.ibb.co/6wG6YV6/logo.png" \
-                -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
-                -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
-                -c:a aac -b:a 128k -ar 44100 \
-                -f mpegts http://127.0.0.1:8080/live || echo "Next"
-              fi
+              echo "Error downloading Video $count"
             fi
             
-            # Storage clear rakhne ke liye safai
             rm -f "$filename"
             count=$((count+1))
           done
-          echo "Playlist finished, restarting loop..."
-          sleep 5
         done
