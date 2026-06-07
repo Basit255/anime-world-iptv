@@ -1,4 +1,4 @@
-name: 24-7 Animex Zone IPTV Streamer
+name: 24-7 Animex Zone Auto-Bypass Streamer
 
 on:
   workflow_dispatch:
@@ -13,8 +13,7 @@ jobs:
     - name: Install FFmpeg and Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg curl unzip python3-pip
-        pip3 install gdown --break-system-packages
+        sudo apt-get install -y ffmpeg curl unzip
 
     - name: Download and Install Localtonet
       run: |
@@ -29,69 +28,50 @@ jobs:
         ./localtonet -token $LOCALTONET_AUTH_TOKEN -protocol http -port 8080 > /dev/null 2>&1 &
         sleep 10
 
-    - name: Run Python Downloader and Streamer
+    - name: Smart Auto-Click Download & Stream
       run: |
-        cat << 'EOF' > stream_runner.py
-        import os
-        import subprocess
-        import time
-
-        def get_gdrive_id(url):
-            # URL se file ID nikalne ka tareeqa
-            if "id=" in url:
-                return url.split("id=")[1].split("&")[0].strip()
-            elif "file/d/" in url:
-                return url.split("file/d/")[1].split("/")[0].strip()
-            return None
-
-        while True:
-            if not os.path.exists("playlist.m3u"):
-                print("Error: playlist.m3u not found!")
-                time.sleep(10)
-                continue
-
-            with open("playlist.m3u", "r") as f:
-                lines = f.readlines()
-
-            urls = [line.strip() for line in lines if line.strip().startswith("http")]
-            
-            if not urls:
-                print("No URLs found in playlist.m3u")
-                time.sleep(5)
-                continue
-
-            for count, url in enumerate(urls, 1):
-                file_id = get_gdrive_id(url)
-                if not file_id:
-                    print(f"Skipping invalid URL: {url}")
-                    continue
-
-                filename = f"video_{count}.mp4"
-                print(f"Downloading Video {count} (ID: {file_id})...")
-                
-                # gdown ko run karna python se
-                download_cmd = f'gdown --id {file_id} -O {filename} --remaining-ok --quiet'
-                res = os.system(download_cmd)
-
-                if os.path.exists(filename) and os.path.getsize(filename) > 1000:
-                    print(f"Video {count} downloaded successfully. Starting FFmpeg stream...")
-                    
-                    ffmpeg_cmd = [
-                        "ffmpeg", "-re", "-i", filename, "-i", "https://i.ibb.co/6wG6YV6/logo.png",
-                        "-filter_complex", "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10",
-                        "-c:v", "libx264", "-preset", "veryfast", "-b:v", "1200k", "-maxrate", "1200k", "-bufsize", "2400k",
-                        "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
-                        "-f", "mpegts", "http://127.0.0.1:8080/live"
-                    ]
-                    
-                    # FFmpeg chalana aur khatam hone ka intezar karna
-                    subprocess.run(ffmpeg_cmd)
-                else:
-                    print(f"Failed to download Video {count}")
-
-                # Safai taaki space full na ho
-                if os.path.exists(filename):
-                    os.remove(filename)
-        EOF
+        echo "Starting Google Drive Bypass Streamer..."
         
-        python3 stream_runner.py
+        while true; do
+          count=1
+          # playlist.m3u se sirf links nikalna
+          grep -E '^https?://' playlist.m3u | while read -r url; do
+            # URL se File ID alag karna
+            FILE_ID=$(echo "$url" | grep -oP '(id=|/d/)\K[^&\s]+')
+            filename="video_${count}.mp4"
+            
+            echo "Processing Video $count (ID: $FILE_ID)..."
+            
+            # Step 1: Google Drive par pehli request bhej kar cookies save karna
+            curl -c cookies.txt -s -L "https://docs.google.com/uc?export=download&id=${FILE_ID}" > confirm.html
+            
+            # Step 2: "Download Anyway" button ka hidden confirmation code (token) nikalna
+            CONFIRM=$(grep -o 'confirm=[^&"]*' confirm.html | head -n 1 | cut -d= -f2)
+            
+            # Step 3: Agar token mil jaye (Badi file ho), toh token ke sath download karna, warna direct download
+            if [ ! -z "$CONFIRM" ]; then
+              echo "Bypass Token Found! Clicking 'Download Anyway' automatically..."
+              curl -b cookies.txt -c cookies.txt -L "https://docs.google.com/uc?export=download&confirm=${CONFIRM}&id=${FILE_ID}" -o "$filename"
+            else
+              echo "Small file or direct link. Downloading directly..."
+              curl -b cookies.txt -L "https://docs.google.com/uc?export=download&id=${FILE_ID}" -o "$filename"
+            fi
+            
+            # Step 4: Check karna ke asli video download hui ya nahi
+            if [ -f "$filename" ] && [ -s "$filename" ]; then
+              echo "Video $count downloaded successfully! Starting stream..."
+              
+              ffmpeg -re -i "$filename" -i "https://i.ibb.co/6wG6YV6/logo.png" \
+              -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
+              -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
+              -c:a aac -b:a 128k -ar 44100 \
+              -f mpegts http://127.0.0.1:8080/live || echo "Moving to next video"
+            else
+              echo "Error: Download failed for Video $count"
+            fi
+            
+            # Safai taaki storage full na ho
+            rm -f "$filename" confirm.html cookies.txt
+            count=$((count+1))
+          done
+        done
