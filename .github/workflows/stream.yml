@@ -1,4 +1,4 @@
-namename: 24-7 Animex Zone Ultimate Streamer
+name: 24-7 Animex Zone Ultimate Streamer
 
 on:
   workflow_dispatch:
