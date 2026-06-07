@@ -13,27 +13,12 @@ jobs:
     - name: Install FFmpeg and Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg curl unzip
+        sudo apt-get install -y ffmpeg curl
 
-    - name: Download and Install Localtonet
+    - name: Start Live Stream Server
       run: |
-        curl -L https://localtonet.com/download/localtonet-linux-x64.zip -o localtonet.zip
-        unzip localtonet.zip
-        chmod +x localtonet
-
-    - name: Start Localtonet Tunnel
-      env:
-        LOCALTONET_TOKEN: ${{ secrets.LOCALTONET_TOKEN }}
-      run: |
-        echo "Starting Localtonet with Verified Secret Name..."
-        ./localtonet -token $LOCALTONET_TOKEN -protocol http -port 8080 > localtonet.log 2>&1 &
-        echo "Waiting 20 seconds for tunnel to open..."
-        sleep 20
-        cat localtonet.log || true
-
-    - name: Direct Release Stream Loop
-      run: |
-        echo "Starting Direct GitHub Release Streamer..."
+        echo "Starting Local Server on Port 8080..."
+        # Background loop for smooth streaming
         while true; do
           count=1
           grep -E '^https?://' playlist.m3u | while read -r url; do
@@ -43,13 +28,14 @@ jobs:
             curl -L "$url" -o "$filename"
             
             if [ -f "$filename" ] && [ -s "$filename" ]; then
-              echo "Video $count downloaded successfully! Starting stream..."
+              echo "Video $count downloaded successfully! Streaming to Serveo..."
               
+              # Streaming directly to serveo local port
               ffmpeg -re -i "$filename" -i logo.png \
               -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
               -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
               -c:a aac -b:a 128k -ar 44100 \
-              -f mpegts http://127.0.0.1:8080/live || echo "Moving next..."
+              -f mpegts listen://127.0.0.1:8080 || echo "Next video..."
             else
               echo "Error downloading Video $count"
             fi
@@ -58,4 +44,8 @@ jobs:
             count=$((count+1))
           done
           sleep 5
-        done
+        done &
+        
+        echo "Exposing Stream to Internet via Serveo..."
+        # Yeh command aapko bina kisi token ke direct public link generate karke degi
+        ssh -o StrictHostKeyChecking=no -R animexzone:80:127.0.0.1:8080 serveo.net
