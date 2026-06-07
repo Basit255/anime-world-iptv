@@ -30,7 +30,7 @@ jobs:
 
     - name: Direct Release Stream Loop
       run: |
-        echo "Starting Direct GitHub Release Streamer..."
+        echo "Starting Direct GitHub Release Streamer with Local Logo..."
         
         while true; do
           count=1
@@ -38,13 +38,14 @@ jobs:
             filename="video_${count}.mp4"
             echo "Downloading Video $count from GitHub Releases..."
             
-            # Direct fast download without any security pages
+            # Direct fast download
             curl -L "$url" -o "$filename"
             
             if [ -f "$filename" ] && [ -s "$filename" ]; then
               echo "Video $count downloaded successfully! Starting stream..."
               
-              ffmpeg -re -i "$filename" -i "https://i.ibb.co/6wG6YV6/logo.png" \
+              # Yahan logo.png direct repository se local uthaye ga
+              ffmpeg -re -i "$filename" -i logo.png \
               -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
               -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
               -c:a aac -b:a 128k -ar 44100 \
