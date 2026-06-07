@@ -1,4 +1,4 @@
-name: 24-7 Animex Zone Cloud Streamer
+name: 24-7 Animex Zone Cloud Streamer (Serveo)
 
 on:
   workflow_dispatch:
@@ -15,10 +15,11 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y ffmpeg curl
 
-    - name: Start Live Stream Server
+    - name: Start Stream Server and Expose Link
       run: |
         echo "Starting Local Server on Port 8080..."
-        # Background loop for smooth streaming
+        
+        # Background loop taaki video background mein chalti rahe
         while true; do
           count=1
           grep -E '^https?://' playlist.m3u | while read -r url; do
@@ -28,14 +29,13 @@ jobs:
             curl -L "$url" -o "$filename"
             
             if [ -f "$filename" ] && [ -s "$filename" ]; then
-              echo "Video $count downloaded successfully! Streaming to Serveo..."
+              echo "Video $count downloaded successfully! Streaming to port 8080..."
               
-              # Streaming directly to serveo local port
               ffmpeg -re -i "$filename" -i logo.png \
               -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
               -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
               -c:a aac -b:a 128k -ar 44100 \
-              -f mpegts listen://127.0.0.1:8080 || echo "Next video..."
+              -f mpegts http://127.0.0.1:8080 || echo "Moving next..."
             else
               echo "Error downloading Video $count"
             fi
@@ -45,7 +45,13 @@ jobs:
           done
           sleep 5
         done &
+
+        echo "Waiting for FFmpeg to initialize..."
+        sleep 5
+
+        echo "--------------------------------------------------------"
+        echo "🚀 AAPKA VLC LIVE LINK NEECHE GENERATE HO RAHA HAI 🚀"
+        echo "--------------------------------------------------------"
         
-        echo "Exposing Stream to Internet via Serveo..."
-        # Yeh command aapko bina kisi token ke direct public link generate karke degi
+        # Serveo ka automatic tunnel link create karne ki command
         ssh -o StrictHostKeyChecking=no -R animexzone:80:127.0.0.1:8080 serveo.net
