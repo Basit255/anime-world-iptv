@@ -13,7 +13,8 @@ jobs:
     - name: Install FFmpeg and Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg curl unzip
+        sudo apt-get install -y ffmpeg curl unzip python3-pip
+        pip3 install gdown --break-system-packages
 
     - name: Download and Install Localtonet
       run: |
@@ -28,50 +29,52 @@ jobs:
         ./localtonet -token $LOCALTONET_AUTH_TOKEN -protocol http -port 8080 > /dev/null 2>&1 &
         sleep 10
 
-    - name: Smart Auto-Click Download & Stream
+    - name: Ultimate Gdown Bypass Stream
       run: |
-        echo "Starting Google Drive Smart Bypass Streamer..."
+        echo "Starting Google Drive Ultimate Streamer..."
         
         while true; do
           count=1
-          # playlist.m3u se sirf links nikalna
+          # playlist.m3u se ek ek karke video links read karna
           grep -E '^https?://' playlist.m3u | while read -r url; do
-            # URL se File ID alag karna (chahe uc?id= ho ya file/d/)
-            FILE_ID=$(echo "$url" | grep -oP '(id=|/d/)\K[^&\s/]+')
             filename="video_${count}.mp4"
+            echo "----------------------------------------"
+            echo "Downloading Video $count using Clean Gdown..."
             
-            echo "Processing Video $count (ID: $FILE_ID)..."
+            # Gdown bina kisi crash flag ke direct pure URL ko handle karega
+            gdown "$url" -o "$filename" --fuzzy
             
-            # Step 1: Google Drive par request bhej kar cookies save karna aur HTML page check karna
-            curl -c cookies.txt -s -L "https://docs.google.com/uc?export=download&id=${FILE_ID}" > confirm.html
-            
-            # Step 2: "Download Anyway" button ka hidden confirmation token nikalna
-            CONFIRM=$(grep -o 'confirm=[^&"]*' confirm.html | head -n 1 | cut -d= -f2)
-            
-            # Step 3: Agar confirmation token mila (Bari file hai), toh automatic click karke download karna
-            if [ ! -z "$CONFIRM" ]; then
-              echo "HTML Warning Detected! Clicking 'Download Anyway' automatically..."
-              curl -b cookies.txt -c cookies.txt -L "https://docs.google.com/uc?export=download&confirm=${CONFIRM}&id=${FILE_ID}" -o "$filename"
-            else
-              echo "Direct download link or small file. Downloading directly..."
-              curl -b cookies.txt -L "https://docs.google.com/uc?export=download&id=${FILE_ID}" -o "$filename"
-            fi
-            
-            # Step 4: Check karna ke file sahi download hui (Size > 10MB)
-            if [ -f "$filename" ] && [ $(stat -c%s "$filename") -gt 10000000 ]; then
-              echo "Video $count downloaded 100% successfully! Starting stream..."
+            # Check karna ki asli video download hui hai ya nahi (Size check > 5MB)
+            if [ -f "$filename" ] && [ $(stat -c%s "$filename") -gt 5000000 ]; then
+              echo "Success: Video $count downloaded completely! Starting stream..."
               
               ffmpeg -re -i "$filename" -i "https://i.ibb.co/6wG6YV6/logo.png" \
               -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
               -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
               -c:a aac -b:a 128k -ar 44100 \
-              -f mpegts http://127.0.0.1:8080/live || echo "Moving to next video"
+              -f mpegts http://127.0.0.1:8080/live || echo "Stream stopped, moving next..."
             else
-              echo "Error: HTML page could not be bypassed or file is invalid for Video $count"
+              echo "Warning: Download failed or Google Drive warning page received for Video $count."
+              echo "Trying alternative direct curl approach..."
+              
+              # Fallback agar gdown ko bhi drive block kare
+              FILE_ID=$(echo "$url" | grep -oP '(id=|/d/)\K[^&\s/]+')
+              curl -L "https://docs.google.com/uc?export=download&id=${FILE_ID}" -o "$filename"
+              
+              if [ -f "$filename" ] && [ $(stat -c%s "$filename") -gt 5000000 ]; then
+                echo "Fallback download success! Streaming..."
+                ffmpeg -re -i "$filename" -i "https://i.ibb.co/6wG6YV6/logo.png" \
+                -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
+                -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
+                -c:a aac -b:a 128k -ar 44100 \
+                -f mpegts http://127.0.0.1:8080/live || echo "Next"
+              fi
             fi
             
-            # Safai taaki cloud ki space full na ho
-            rm -f "$filename" confirm.html cookies.txt
+            # Storage clear rakhne ke liye safai
+            rm -f "$filename"
             count=$((count+1))
           done
+          echo "Playlist finished, restarting loop..."
+          sleep 5
         done
