@@ -13,7 +13,8 @@ jobs:
     - name: Install FFmpeg and Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg curl unzip
+        sudo apt-get install -y ffmpeg curl unzip python3-pip
+        pip3 install gdown --break-system-packages
 
     - name: Download and Install Localtonet
       run: |
@@ -28,37 +29,38 @@ jobs:
         ./localtonet -token $LOCALTONET_AUTH_TOKEN -protocol http -port 8080 > /dev/null 2>&1 &
         sleep 10
 
-    - name: Safe Loop Streamer (Small Files)
+    - name: Gdown Smart Loop Streamer
       run: |
-        echo "Starting safe sequential stream for Animex Zone..."
+        echo "Starting stable Google Drive stream with Animex Zone logo..."
         
         while true; do
           count=1
-          # playlist.m3u se sirf links nikalne ke liye
+          # playlist.m3u se sirf Google Drive ki IDs nikalne ke liye
           grep -E '^https?://' playlist.m3u | while read -r link; do
-            echo "Downloading video $count from Google Drive..."
+            # Link se ID alag karna (uc?export=download&id=XYZ ya file/d/XYZ)
+            FILE_ID=$(echo "$link" | grep -oP '(id=|/d/)\K[^&\s]+')
             
-            # Google Drive se bina warning ke file download karne ka safe tareeqa
-            curl -L -c cookies.txt "$link" > confirm.html
-            CONFIRM_CODE=$(grep -o 'confirm=[^&"]*' confirm.html | head -n 1)
+            echo "Downloading video $count via gdown (ID: $FILE_ID)..."
             
-            if [ ! -z "$CONFIRM_CODE" ]; then
-              curl -L -b cookies.txt "${link}&${CONFIRM_CODE}" -o "video_${count}.mp4"
+            # gdown ke zariye safe download
+            gdown --id "$FILE_ID" -O "video_${count}.mp4" --remaining-ok
+            
+            # Check karna ke file sahi download hui ya nahi
+            if [ -f "video_${count}.mp4" ] && [ -s "video_${count}.mp4" ]; then
+              echo "Video $count verified. Streaming now..."
+              
+              ffmpeg -re -i "video_${count}.mp4" -i "https://i.ibb.co/6wG6YV6/logo.png" \
+              -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
+              -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
+              -c:a aac -b:a 128k -ar 44100 \
+              -f mpegts http://127.0.0.1:8080/live || echo "Stream gap handled"
+              
             else
-              curl -L -b cookies.txt "$link" -o "video_${count}.mp4"
+              echo "Error: Video $count download failed or file corrupt."
             fi
             
-            echo "Video $count downloaded successfully. Streaming now..."
-            
-            # Local file ko logo ke sath stream karna
-            ffmpeg -re -i "video_${count}.mp4" -i "https://i.ibb.co/6wG6YV6/logo.png" \
-            -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
-            -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
-            -c:a aac -b:a 128k -ar 44100 \
-            -f mpegts http://127.0.0.1:8080/live || echo "Stream gap/skip handled"
-            
-            # Stream khatam hone ke baad file delete taaki storage khali rahe
-            rm -f "video_${count}.mp4" confirm.html cookies.txt
+            # Safai taaki disk full na ho
+            rm -f "video_${count}.mp4"
             count=$((count+1))
           done
         done
