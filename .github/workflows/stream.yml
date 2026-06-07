@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Install FFmpeg and Tools
       run: |
@@ -29,37 +29,33 @@ jobs:
         ./localtonet -token $LOCALTONET_AUTH_TOKEN -protocol http -port 8080 > /dev/null 2>&1 &
         sleep 10
 
-    - name: Gdown Smart Loop Streamer
+    - name: Gdown Direct Streamer
       run: |
-        echo "Starting stable Google Drive stream with Animex Zone logo..."
+        echo "Starting clean Google Drive stream with Animex Zone logo..."
         
         while true; do
           count=1
-          # playlist.m3u se sirf Google Drive ki IDs nikalne ke liye
-          grep -E '^https?://' playlist.m3u | while read -r link; do
-            # Link se ID alag karna (uc?export=download&id=XYZ ya file/d/XYZ)
-            FILE_ID=$(echo "$link" | grep -oP '(id=|/d/)\K[^&\s]+')
+          # playlist.m3u se lines read karna
+          grep -E '^https?://' playlist.m3u | while read -r url; do
+            echo "Downloading video $count from Google Drive..."
             
-            echo "Downloading video $count via gdown (ID: $FILE_ID)..."
+            # Direct URL ko bina regex ke gdown mein pass karna
+            gdown "$url" -o "video_${count}.mp4" --remaining-ok
             
-            # gdown ke zariye safe download
-            gdown --id "$FILE_ID" -O "video_${count}.mp4" --remaining-ok
-            
-            # Check karna ke file sahi download hui ya nahi
             if [ -f "video_${count}.mp4" ] && [ -s "video_${count}.mp4" ]; then
-              echo "Video $count verified. Streaming now..."
+              echo "Video $count downloaded successfully. Streaming now..."
               
               ffmpeg -re -i "video_${count}.mp4" -i "https://i.ibb.co/6wG6YV6/logo.png" \
               -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
               -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
               -c:a aac -b:a 128k -ar 44100 \
-              -f mpegts http://127.0.0.1:8080/live || echo "Stream gap handled"
+              -f mpegts http://127.0.0.1:8080/live || echo "Next video transition"
               
             else
-              echo "Error: Video $count download failed or file corrupt."
+              echo "Error: Could not download video $count"
             fi
             
-            # Safai taaki disk full na ho
+            # Cleanup
             rm -f "video_${count}.mp4"
             count=$((count+1))
           done
