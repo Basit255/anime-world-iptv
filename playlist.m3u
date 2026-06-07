@@ -1,9 +1,6 @@
 #EXTM3U
-#EXTINF:-1,DBS ep 1
-https://docs.google.com/uc?export=download&id=1EvZI6fVzyKfLUzZ1eDWQ29V1ebz4DnNe
-#EXTINF:-1,DBS ep 2
-https://docs.google.com/uc?export=download&id=1bCmmsfnL9oMJYO5GYrB92sg47jR8NPnW
-#EXTINF:-1,DBS EP 3
-https://docs.google.com/uc?export=download&id=1nA2fczTErw4KEFpL1HCfWrL7TECT17RI
-#EXTINF:-1,dbs ep 4
-https://docs.google.com/uc?export=download&id=1ndU2SKweWrOj4g05mkpAbr85NMXwcshs
+#EXTINF:-1 tvg-logo="https://i.ibb.co/6wG6YV6/logo.png",Animex Zone Video 1
+https://docs.google.com/uc?export=download&id=10Nrq1ThkxxHgF_bLsO7CucW9ZO9RN1j9
+
+#EXTINF:-1 tvg-logo="https://i.ibb.co/6wG6YV6/logo.png",Animex Zone Video 2
+https://docs.google.com/uc?export=download&id=1Vi-eJNJ2DhjzFGvnAqPPxDMthkkzRb0L
