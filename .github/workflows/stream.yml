@@ -21,20 +21,18 @@ jobs:
         unzip localtonet.zip
         chmod +x localtonet
 
-    - name: Start Localtonet and Stream
+    - name: Start Localtonet Tunnel
       env:
-        LOCALTONET_AUTH_TOKEN: ${{ secrets.LOCALTONET_AUTH_TOKEN }}
+        LOCALTONET_TOKEN: ${{ secrets.LOCALTONET_TOKEN }}
       run: |
-        echo "Initializing Localtonet Tunnel..."
-        # Tunnel ko initialize karke check karna
-        ./localtonet -token $LOCALTONET_AUTH_TOKEN -protocol http -port 8080 > localtonet.log 2>&1 &
-        
-        echo "Waiting 15 seconds for tunnel connection..."
-        sleep 15
-        
-        # Logs check karna agar koi error ho
+        echo "Starting Localtonet with Verified Secret Name..."
+        ./localtonet -token $LOCALTONET_TOKEN -protocol http -port 8080 > localtonet.log 2>&1 &
+        echo "Waiting 20 seconds for tunnel to open..."
+        sleep 20
         cat localtonet.log || true
-        
+
+    - name: Direct Release Stream Loop
+      run: |
         echo "Starting Direct GitHub Release Streamer..."
         while true; do
           count=1
@@ -47,12 +45,11 @@ jobs:
             if [ -f "$filename" ] && [ -s "$filename" ]; then
               echo "Video $count downloaded successfully! Starting stream..."
               
-              # Standard stream command without breaking connection
               ffmpeg -re -i "$filename" -i logo.png \
               -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
               -c:v libx264 -preset veryfast -b:v 1200k -maxrate 1200k -bufsize 2400k \
               -c:a aac -b:a 128k -ar 44100 \
-              -f mpegts http://127.0.0.1:8080/live || echo "Connection issue, moving next..."
+              -f mpegts http://127.0.0.1:8080/live || echo "Moving next..."
             else
               echo "Error downloading Video $count"
             fi
