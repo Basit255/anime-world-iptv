@@ -1,4 +1,4 @@
-name: 24-7 Animex Zone Direct Cloud Streamer
+namename: 24-7 Animex Zone Ultimate Streamer
 
 on:
   workflow_dispatch:
@@ -13,43 +13,41 @@ jobs:
     - name: Install Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y curl nodejs
+        sudo apt-get install -y ffmpeg curl
 
-    - name: Start Ultimate Direct Server
+    - name: Start Direct Serveo Stream
       run: |
-        echo "Creating Instant Live Stream Server..."
+        echo "Starting Stream directly via Serveo Reverse Tunnel..."
         
-        # Ek makkhan chota server scripts banana bina kisi port failure ke
-        cat << 'EOF' > server.js
-        const http = require('http');
-        const { exec } = require('child_process');
-        
-        const server = http.createServer((req, res) => {
-          console.log("VLC Connected! Starting live feed...");
-          res.writeHead(200, { 'Content-Type': 'video/mpjs', 'Connection': 'keep-alive' });
-          
-          // FFmpeg direct download aur logo overlay ko feed karega VLC mein
-          const ffmpegCmd = `ffmpeg -re -i "https://github.com/Basit255/anime-world-iptv/releases/download/v1.0/Video.1" -i logo.png -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" -c:v libx264 -preset veryfast -b:v 1000k -c:a aac -b:a 128k -f mpegts pipe:1`;
-          
-          const ffmpeg = exec(ffmpegCmd);
-          ffmpeg.stdout.pipe(res);
-          
-          req.on('close', () => {
-            console.log("VLC Disconnected.");
-            ffmpeg.kill();
-          });
-        });
-        
-        server.listen(8080, '0.0.0.0', () => {
-          console.log("Server is ready on port 8080");
-        });
-        EOF
-        
-        node server.js &
+        # Background SSH tunnel setup properly
+        ssh -o StrictHostKeyChecking=no -R 80:127.0.0.1:8080 serveo.net > serveo.log 2>&1 &
         sleep 5
+        cat serveo.log || true
         
-        echo "--------------------------------------------------------"
-        echo "🚀 LOCAL TENSION KHATAM - SERVEO CONNECTING... 🚀"
-        echo "--------------------------------------------------------"
-        
-        ssh -o StrictHostKeyChecking=no -R animexzone:80:127.0.0.1:8080 serveo.net
+        echo "Starting Video Loop..."
+        while true; do
+          count=1
+          grep -E '^https?://' playlist.m3u | while read -r url; do
+            filename="video_${count}.mp4"
+            echo "Downloading Video $count from GitHub Releases..."
+            
+            curl -L "$url" -o "$filename"
+            
+            if [ -f "$filename" ] && [ -s "$filename" ]; then
+              echo "Video $count downloaded! Pushing direct stream..."
+              
+              # Direct stream connection to the local port mapped with serveo
+              ffmpeg -re -i "$filename" -i logo.png \
+              -filter_complex "[1:v]scale=120:-1[logo];[0:v][logo]overlay=W-w-10:10" \
+              -c:v libx264 -preset veryfast -b:v 1000k -maxrate 1000k -bufsize 2000k \
+              -c:a aac -b:a 128k -ar 44100 \
+              -f mpegts http://127.0.0.1:8080 || echo "Moving next..."
+            else
+              echo "Error downloading Video $count"
+            fi
+            
+            rm -f "$filename"
+            count=$((count+1))
+          done
+          sleep 2
+        done
